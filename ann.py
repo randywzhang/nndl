@@ -164,7 +164,7 @@ class Network(object):
 
             # check that the activation of the final layer has its max value
             # at the labeled digit
-            if max(activations[-1]) == activations[datum[1]]:
+            if np.argmax(activations[-1]) == datum[1]:
                 num_correct += 1
 
         return num_correct / len(test_data)
