@@ -20,7 +20,8 @@ class Network(object):
         # initializes biases for all layers except the input layer
         self.biases = [np.random.randn(y, 1) for y in sizes[1:]]
 
-        # randn creates the weight matrix with shape (y, x)
+        # randn creates the weight matrix with shape (y, x) with values taken from
+        # the gaussian distribution
         # W*x -> (y, x) * (x, 1) -> (y, 1) shape
         self.weights = [np.random.randn(y, x) for x, y in zip(sizes[:-1], sizes[1:])]
 
@@ -40,13 +41,15 @@ class Network(object):
         # The activation of each layer is f(z) where f is the sigmoid
         # function and z is the vector obtained by multiplying the
         # matrix of weights by the activation in the previous layer
+        activation = x
         activations = [x]
         z_values = []
         for bias_vector, weight_matrix in zip(self.biases, self.weights):
-            z = np.matmul(weight_matrix, x) + bias_vector
-            x = sigmoid(z)
+            z = np.matmul(weight_matrix, activation) + bias_vector
             z_values.append(z)
-            activations.append(x)
+
+            activation = sigmoid(z)
+            activations.append(activation)
 
         return activations, z_values
 
@@ -70,7 +73,7 @@ class Network(object):
 
         # begin with the derivative of the loss function with respect to the input
         # to the final layer
-        dLdz = self.loss_derivative(activations[-1], y) * sigmoid_prime(z_values[-1])
+        dLdz = loss_derivative(activations[-1], y) * sigmoid_prime(z_values[-1])
 
         # dL/db = dL/dz * dz/db, dz/db = 1 => dL/db = dL/dz
         dLdb[-1] = dLdz
@@ -83,7 +86,7 @@ class Network(object):
         dLdW[-1] = np.matmul(dLdz, np.transpose(activations[-2]))
 
         # continue chaining derivatives until each variable has been updated
-        for layer in range(2, self.num_layers - 1):
+        for layer in range(2, self.num_layers):
             # let z, denote the input to the layer before z
             # a denotes the activation of the layer before z
             # dL/dz, = dL/dz * dz/da * da/dz,
@@ -126,27 +129,23 @@ class Network(object):
                 for training_datum in batch:
                     dLdb, dLdW = self.back_propagate(training_datum[0], training_datum[1])
 
-                    # subtract the gradient because we want to minimize loss
-                    stochastic_b -= dLdb
-                    stochastic_W -= dLdW
-
-                # take the average of all of the gradients
-                stochastic_b /= len(batch)  # len(batch) is guaranteed to be batch_size for all batches except
-                stochastic_W /= len(batch)  # batches[-1] where it could be less than the batch_size
-
-                # scale down by the learning rate
-                stochastic_b *= learning_rate
-                stochastic_W *= learning_rate
+                    # add the gradients together
+                    stochastic_b = [b + db for b, db in zip(stochastic_b, dLdb)]
+                    stochastic_W = [W + dW for W, dW in zip(stochastic_W, dLdW)]
 
                 # update the network variables
-                self.biases += stochastic_b
-                self.weights += stochastic_W
+                # by taking the average of all of the gradients by dividing by batch size
+                # and scaling down by the learning rate
+                # len(batch) is guaranteed to be batch_size for all batches except
+                # batches[-1] where it could be less than the batch_size
+                self.biases = [b - db * learning_rate / len(batch) for b, db in zip(self.biases, stochastic_b)]
+                self.weights = [W - dW * learning_rate / len(batch) for W, dW in zip(self.weights, stochastic_W)]
 
             if test_data:
                 # TODO: visualize network variables here
                 # evaluate the network after every epoch
                 accuracy = self.evaluate(test_data)
-                print("Epoch " + epoch + ": " + accuracy)
+                print("Epoch {0}: {1}".format(epoch, accuracy))
 
     """
     Network evaluation function
@@ -158,6 +157,7 @@ class Network(object):
     def evaluate(self, test_data):
         # keep track of correct classifications
         num_correct = 0
+
         for datum in test_data:
             # send each input in a forward pass through the network
             activations, z_values = self.feed_forward(datum[0])
@@ -217,3 +217,23 @@ def save_network(ann, filename):
 def load_network(filename):
     with open(filename, 'rb') as in_file:
         return pickle.load(in_file)
+
+
+"""
+Main
+"""
+def main():
+    ann = Network([28*28, 30, 10])
+    training_data, test_data = mnist.load_data()
+
+    # reformat mnist data into tuples of (input, expected output)
+    # and flatten images into "1-D arrays" (mxn but n = 1)
+    training_data = [(x.reshape(28*28, 1), y) for x, y in zip(training_data[0], training_data[1])]
+    test_data = [(x.reshape(28*28, 1), y) for x, y in zip(test_data[0], test_data[1])]
+
+    ann.SGD(training_data, 30, 10, 3e-1, test_data)
+    save_network(ann, "test.pkl")
+
+
+if __name__ == "__main__":
+    main()
