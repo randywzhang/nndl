@@ -77,6 +77,7 @@ class Network(object):
 
         # dL/db = dL/dz * dz/db, dz/db = 1 => dL/db = dL/dz
         dLdb[-1] = dLdz
+
         # dL/dW = dL/dz * dz/dW = dL/dz * activation of previous layer
         # for each weight, change in z with respect to that weight is the activation
         # of the neuron in the previous layer.
@@ -114,12 +115,12 @@ class Network(object):
         order to prevent divergence from overshooting the minima
     """
     def SGD(self, training_data, epochs, batch_size, learning_rate, test_data=None):
-        # split training data into batches
-        batches = [training_data[i:i + batch_size] for i in range(0, len(training_data), batch_size)]
-
         for epoch in range(epochs):
             # shuffle the data, prevent overfitting
             np.random.shuffle(training_data)
+
+            # split training data into batches
+            batches = [training_data[i:i + batch_size] for i in range(0, len(training_data), batch_size)]
 
             for batch in batches:
                 stochastic_b = [np.zeros(b.shape) for b in self.biases]
@@ -189,10 +190,21 @@ def sigmoid(x):
 
 
 # The following functions are derivatives used for backpropagation
+"""
+@param actual - n-d array denoting the activations of the final layer
+@param expected - scalar denoting the expected digit
+@return - n-d array denoting the difference between the actual result
+    and basis vector ei with i = expected
+"""
 def loss_derivative(actual, expected):
     # (x - x0)^2 == (x0 - x)^2
     # d/dx (x0 - x)^2 = 2 (x0 - x) * -1 == 2 (actual - expected)
-    return actual - expected
+
+    # create basis vector
+    expected_basis = np.zeros(actual.shape)
+    expected_basis[expected] = 1.0
+
+    return actual - expected_basis
 
 
 def sigmoid_prime(x):
@@ -227,9 +239,10 @@ def main():
     training_data, test_data = mnist.load_data()
 
     # reformat mnist data into tuples of (input, expected output)
-    # and flatten images into "1-D arrays" (mxn but n = 1)
-    training_data = [(x.reshape(28*28, 1), y) for x, y in zip(training_data[0], training_data[1])]
-    test_data = [(x.reshape(28*28, 1), y) for x, y in zip(test_data[0], test_data[1])]
+    # flatten images into "1-D arrays" (mxn but n = 1)
+    # and scale image down to the range [0,1]
+    training_data = [(x.reshape(28*28, 1) / 255, y) for x, y in zip(training_data[0], training_data[1])]
+    test_data = [(x.reshape(28*28, 1) / 255, y) for x, y in zip(test_data[0], test_data[1])]
 
     ann.SGD(training_data, 30, 10, 3e-1, test_data)
     save_network(ann, "test.pkl")
